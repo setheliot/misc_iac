@@ -7,15 +7,10 @@ provider "aws" {
   region = "us-east-2"
 }
 
-provider "aws" {
-  alias  = "us_east_1"
-  region = "us-east-1"
-}
-
 data "aws_availability_zones" "available" {}
 
 locals {
-  name   = "rs-seth-18082025"
+  name   = "rs-seth-19082025"
   region = "us-west-2"
 
   vpc_cidr = "10.0.0.0/16"
@@ -42,7 +37,7 @@ module "redshift" {
   allow_version_upgrade = true
   node_type             = "ra3.large"
   number_of_nodes       = 2
-  multi_az              = true
+  multi_az              = false
 
   database_name   = "mydb"
   master_username = "mydbuser"
@@ -63,12 +58,12 @@ module "redshift" {
   subnet_ids             = module.vpc.redshift_subnets
 
   # Only available when using the ra3.x type
-  availability_zone_relocation_enabled = false
+  availability_zone_relocation_enabled = true
 
-  # snapshot_copy = {
-  #   destination_region = "us-east-2"
-  #   grant_name         = aws_redshift_snapshot_copy_grant.useast2.snapshot_copy_grant_name
-  # }
+  snapshot_copy = {
+    destination_region = "us-east-2"
+    grant_name         = aws_redshift_snapshot_copy_grant.useast2.snapshot_copy_grant_name
+  }
 
   logging = {
     bucket_name   = module.s3_logs.s3_bucket_id
