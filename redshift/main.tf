@@ -15,7 +15,7 @@ provider "aws" {
 data "aws_availability_zones" "available" {}
 
 locals {
-  name   = "rs-seth-09082025"
+  name   = "rs-seth-18082025"
   region = "us-west-2"
 
   vpc_cidr = "10.0.0.0/16"
@@ -42,7 +42,7 @@ module "redshift" {
   allow_version_upgrade = true
   node_type             = "ra3.large"
   number_of_nodes       = 2
-  multi_az              = false
+  multi_az              = true
 
   database_name   = "mydb"
   master_username = "mydbuser"
@@ -63,7 +63,7 @@ module "redshift" {
   subnet_ids             = module.vpc.redshift_subnets
 
   # Only available when using the ra3.x type
-  availability_zone_relocation_enabled = true
+  availability_zone_relocation_enabled = false
 
   # snapshot_copy = {
   #   destination_region = "us-east-2"
