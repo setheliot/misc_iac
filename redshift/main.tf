@@ -10,7 +10,7 @@ provider "aws" {
 data "aws_availability_zones" "available" {}
 
 locals {
-  name   = "rs-seth-19082025"
+  name   = "rs-seth-18082025"
   region = "us-west-2"
 
   vpc_cidr = "10.0.0.0/16"
