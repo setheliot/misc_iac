@@ -31,11 +31,8 @@ locals {
     ManagedBy   = "Terraform"
   }
 
-  prefer_ecr = try(length(var.ecr_container_repository_tag) > 0, false)
-
   ecr_prefix_current = "${local.account_id}.dkr.ecr.${local.region}.amazonaws.com"
 
   # Final image URI used by Lambda:
-  image_uri = local.prefer_ecr ? "${local.ecr_prefix_current}/${var.ecr_container_repository_tag}" : var.container_image_uri
-
+  image_uri = "${local.ecr_prefix_current}/${var.ecr_container_image}"
 }

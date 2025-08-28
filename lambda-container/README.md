@@ -10,18 +10,10 @@ Serverless guestbook application using AWS Lambda with container images, API Gat
 - **CloudWatch** - Logging for Lambda and API Gateway
 - **IAM** - Least privilege access roles
 
-## Container Image Options
-
-Choose one of two container image sources:
-
+## Choose the Container Image
 ### ECR (Same Account/Region)
 ```hcl
-ecr_container_repository_tag = "guestbook-app:lambda"
-```
-
-### External Registry
-```hcl
-container_image_uri = "docker.io/nginxdemos/hello"
+ecr_container_image = "guestbook-app:lambda"
 ```
 
 ## Quick Start
