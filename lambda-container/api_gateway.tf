@@ -1,7 +1,7 @@
 # ===== api_gateway.tf =====
 # HTTP API Gateway
 resource "aws_apigatewayv2_api" "guestbook" {
-  name          = "${var.project_name}-${var.environment}-api"
+  name          = "${var.project_name}-api"
   protocol_type = "HTTP"
 
   cors_configuration {
@@ -17,6 +17,10 @@ resource "aws_apigatewayv2_api" "guestbook" {
 }
 
 # API Gateway Integration with Lambda
+# Creates integration_uri of the form
+# "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:253490795979:function:guestbook-app-demo/invocations"
+#      arn:aws:apigateway:<region>:lambda:path/2015-03-31 → fixed prefix for Lambda integrations
+#      /functions/<lambda-function-arn>/invocations → tells API Gateway which function to invoke
 resource "aws_apigatewayv2_integration" "lambda" {
   api_id           = aws_apigatewayv2_api.guestbook.id
   integration_type = "AWS_PROXY"
@@ -26,20 +30,20 @@ resource "aws_apigatewayv2_integration" "lambda" {
   payload_format_version = "2.0"
 }
 
-# API Gateway Routes - Configure based on your app's endpoints
-resource "aws_apigatewayv2_route" "get_entries" {
-  api_id    = aws_apigatewayv2_api.guestbook.id
-  route_key = "GET /"
-  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
-}
+# # API Gateway Routes - Configure based on your app's endpoints
+# resource "aws_apigatewayv2_route" "get_entries" {
+#   api_id    = aws_apigatewayv2_api.guestbook.id
+#   route_key = "GET /"
+#   target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+# }
 
-resource "aws_apigatewayv2_route" "post_entry" {
-  api_id    = aws_apigatewayv2_api.guestbook.id
-  route_key = "POST /"
-  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
-}
+# resource "aws_apigatewayv2_route" "post_entry" {
+#   api_id    = aws_apigatewayv2_api.guestbook.id
+#   route_key = "POST /"
+#   target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+# }
 
-# Catch-all route
+# # Catch-all route
 resource "aws_apigatewayv2_route" "default" {
   api_id    = aws_apigatewayv2_api.guestbook.id
   route_key = "$default"
