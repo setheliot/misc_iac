@@ -1,0 +1,16 @@
+# ===== terraform.tfvars.example =====
+# Copy this to terraform.tfvars and fill in your values
+#
+# Choose ONE of these
+# container_image_uri          = "YOUR_CONTAINER_IMAGE_URI_HERE"
+# ecr_container_repository_tag = "YOUR ECR CONTAINER HERE"
+
+# Set AWS Region
+# aws_region          = "us-east-1"
+
+# These are optional
+# environment         = "dev"
+# project_name        = "guestbook"
+# dynamodb_table_name = "guestbook-entries"
+# lambda_memory_size  = 512
+# lambda_timeout      = 30
