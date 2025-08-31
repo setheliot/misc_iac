@@ -19,8 +19,8 @@ resource "aws_lambda_function" "guestbook" {
       NODE_NAME    = "serverless"
       AWS_LWA_PORT = "8080"
 
-      # This allows us to use an arbitrary APIGW stage
-      BASE_PATH = "/${var.environment}"
+      # This allows us to use an arbitrary APIGW route
+      BASE_PATH = local.base_path
     }
   }
 

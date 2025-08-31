@@ -30,30 +30,37 @@ resource "aws_apigatewayv2_integration" "lambda" {
   payload_format_version = "2.0"
 }
 
-# # API Gateway Routes - Configure based on your app's endpoints
-# resource "aws_apigatewayv2_route" "get_entries" {
-#   api_id    = aws_apigatewayv2_api.guestbook.id
-#   route_key = "GET /"
-#   target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
-# }
-
-# resource "aws_apigatewayv2_route" "post_entry" {
-#   api_id    = aws_apigatewayv2_api.guestbook.id
-#   route_key = "POST /"
-#   target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
-# }
-
-# # Catch-all route
-resource "aws_apigatewayv2_route" "default" {
+# API Gateway Routes - Configure based on your app's endpoints
+resource "aws_apigatewayv2_route" "get_entries" {
   api_id    = aws_apigatewayv2_api.guestbook.id
-  route_key = "$default"
+  route_key = "GET ${local.base_path}"
   target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
 }
+
+resource "aws_apigatewayv2_route" "post_entry" {
+  api_id    = aws_apigatewayv2_api.guestbook.id
+  route_key = "POST ${local.base_path}"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+}
+
+# Users are likely to hit the bare URL (no route) so help them when they do
+resource "aws_apigatewayv2_route" "get_bare" {
+  api_id    = aws_apigatewayv2_api.guestbook.id
+  route_key = "GET /"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+}
+
+# # # Catch-all route
+# resource "aws_apigatewayv2_route" "default" {
+#   api_id    = aws_apigatewayv2_api.guestbook.id
+#   route_key = "$default"
+#   target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+# }
 
 # API Gateway Stage
 resource "aws_apigatewayv2_stage" "guestbook" {
   api_id      = aws_apigatewayv2_api.guestbook.id
-  name        = var.environment
+  name        = "$default"
   auto_deploy = true
 
   access_log_settings {
