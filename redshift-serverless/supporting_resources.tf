@@ -63,3 +63,8 @@ resource "aws_kms_key" "redshift" {
 
   tags = local.tags
 }
+
+resource "aws_kms_alias" "redshift" {
+  name          = "alias/${local.name}"
+  target_key_id = aws_kms_key.redshift.key_id
+}
