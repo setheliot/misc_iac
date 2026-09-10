@@ -1,0 +1,9 @@
+# Requirements for AWS STRANDS Agent with BedrockAgentCoreApp
+strands-agents==1.4.0
+strands-agents-tools==0.2.3
+# [strands-agents] extra pulls in the AgentCoreMemorySessionManager, which wires
+# AgentCore Memory (short-term + long-term recall) into a Strands Agent.
+bedrock-agentcore[strands-agents]>=0.1.0
+# Playwright Python client only (no local Chromium needed; we connect to the
+# AgentCore-managed browser over CDP).
+playwright>=1.40.0
