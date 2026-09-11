@@ -2,7 +2,7 @@
 # Requires Docker + buildx + AWS CLI on the workstation running terraform apply.
 #
 # Re-runs on:
-#   - any change under runtime-sources/container-agent/
+#   - a change to one of the container build inputs below
 #   - ECR repo replacement
 #   - tag change
 #
@@ -12,9 +12,11 @@
 locals {
   container_src_dir = "${path.module}/runtime-sources/container-agent"
 
-  # Hash of all source files — triggers a rebuild when any file changes.
+  # Keep this list aligned with the Dockerfile and its COPY inputs. Generated
+  # files and documentation in the source directory do not affect the image.
+  container_src_files = sort(["Dockerfile", "app.py", "requirements.txt"])
   container_src_hash = sha256(join("", [
-    for f in sort(fileset(local.container_src_dir, "**")) :
+    for f in local.container_src_files :
     filesha256("${local.container_src_dir}/${f}")
   ]))
 }

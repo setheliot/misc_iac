@@ -7,21 +7,23 @@
 # runtime is PYTHON_3_11 and rejects bytecode from other versions.
 
 locals {
-  code_src_dir   = "${path.module}/runtime-sources/code-agent"
+  code_src_dir = "${path.module}/runtime-sources/code-agent"
   # abspath() — the build script `cd`s into $BUILD before zipping, so relative
   # paths from path.module no longer resolve correctly at that point.
   code_build_dir = abspath("${path.module}/.terraform/tmp/code-agent-build")
   code_zip_path  = abspath("${path.module}/.terraform/tmp/code-agent.zip")
   code_tmp_dir   = abspath("${path.module}/.terraform/tmp")
 
+  # Hash and package the same inputs; add application modules/data here as needed.
+  code_src_files = sort(["agent.py", "requirements.txt"])
   code_src_hash = sha256(join("", [
-    for f in sort(fileset(local.code_src_dir, "**")) :
+    for f in local.code_src_files :
     filesha256("${local.code_src_dir}/${f}")
   ]))
 
   # Bump when the build recipe (pip flags, post-processing) changes so the
   # local rebuild and S3 re-upload happen even if source files are unchanged.
-  code_build_revision = "py311-v1"
+  code_build_revision = "py311-v2"
 }
 
 resource "null_resource" "code_build" {
@@ -40,7 +42,10 @@ resource "null_resource" "code_build" {
 
       rm -rf "$BUILD" "$ZIP"
       mkdir -p "$BUILD" '${local.code_tmp_dir}'
-      cp -R "$SRC"/* "$BUILD/"
+      for source_file in ${join(" ", local.code_src_files)}; do
+        mkdir -p "$BUILD/$(dirname "$source_file")"
+        cp "$SRC/$source_file" "$BUILD/$source_file"
+      done
 
       if [ -f "$BUILD/requirements.txt" ]; then
         echo "Installing ARM64 cp311 wheels into $BUILD..."
@@ -72,9 +77,8 @@ resource "aws_s3_object" "code_runtime_source" {
   bucket = aws_s3_bucket.code_runtime.id
   key    = "source.zip"
   source = local.code_zip_path
-  # Include build_revision so a recipe change forces re-upload even when source
-  # files are unchanged.
-  etag = sha256("${local.code_src_hash}-${local.code_build_revision}")
+  # A local build fingerprint belongs in source_hash; S3 supplies its own ETag.
+  source_hash = sha256("${local.code_src_hash}-${local.code_build_revision}")
 
-  depends_on = [null_resource.code_build]
+  depends_on = [null_resource.code_build, aws_s3_bucket_versioning.code_runtime]
 }

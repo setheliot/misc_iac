@@ -12,6 +12,8 @@ resource "awscc_bedrockagentcore_runtime" "code_agent" {
         s3 = {
           bucket = aws_s3_bucket.code_runtime.id
           prefix = aws_s3_object.code_runtime_source.key
+          # A new ZIP version updates the runtime even though its key is unchanged.
+          version_id = aws_s3_object.code_runtime_source.version_id
         }
       }
       entry_point = ["agent.py"]
@@ -82,20 +84,31 @@ resource "awscc_bedrockagentcore_runtime" "container_agent" {
 }
 
 # ─── Runtime endpoints ───
-# agent_runtime_version is pinned so the endpoint follows version bumps; without
-# it the endpoint sticks at the version that existed at create time and never
-# picks up new images or env-var changes.
+# AWSCC retains the resource's old version in the update plan. Read it again
+# after the runtime update so the named endpoint receives the new version in
+# the same apply. With no runtime changes, these reads happen during planning.
+data "awscc_bedrockagentcore_runtime" "code_agent_current" {
+  id = awscc_bedrockagentcore_runtime.code_agent.id
+
+  depends_on = [awscc_bedrockagentcore_runtime.code_agent]
+}
+
+data "awscc_bedrockagentcore_runtime" "container_agent_current" {
+  id = awscc_bedrockagentcore_runtime.container_agent.id
+
+  depends_on = [awscc_bedrockagentcore_runtime.container_agent]
+}
 
 resource "awscc_bedrockagentcore_runtime_endpoint" "code_agent" {
   name                  = "${local.code_runtime_name}_endpoint"
   agent_runtime_id      = awscc_bedrockagentcore_runtime.code_agent.agent_runtime_id
-  agent_runtime_version = awscc_bedrockagentcore_runtime.code_agent.agent_runtime_version
+  agent_runtime_version = data.awscc_bedrockagentcore_runtime.code_agent_current.agent_runtime_version
   tags                  = local.common_tags
 }
 
 resource "awscc_bedrockagentcore_runtime_endpoint" "container_agent" {
   name                  = "${local.container_runtime_name}_endpoint"
   agent_runtime_id      = awscc_bedrockagentcore_runtime.container_agent.agent_runtime_id
-  agent_runtime_version = awscc_bedrockagentcore_runtime.container_agent.agent_runtime_version
+  agent_runtime_version = data.awscc_bedrockagentcore_runtime.container_agent_current.agent_runtime_version
   tags                  = local.common_tags
 }

@@ -57,8 +57,24 @@ terraform apply -var-file=environments/us-east-1.tfvars
 ```
 
 Container builds and code-runtime pip installs run locally via `null_resource`
-during `apply`. Re-running `apply` after editing files under `runtime-sources/`
-will rebuild and push automatically (triggered by a hash of the source tree).
+during `apply`. Content changes to the inputs listed in `container_src_files`
+or `code_src_files` trigger the corresponding build. Update those lists when
+adding application modules or data, and keep the container list aligned with
+the Dockerfile's `COPY` inputs. Caches, editor files, and documentation outside
+these lists do not trigger builds. Comments and whitespace within listed files
+still count as content changes.
+
+The container source hash triggers a runtime version after the image is pushed.
+The CODE runtime references the uploaded ZIP's S3 version. Unchanged inputs and
+configuration produce no new builds or runtime versions; changing deployment
+configuration (such as the model ID) can still require a runtime version. Changing
+the ECR destination/tag or `code_build_revision` deliberately triggers a build.
+
+AWS automatically moves `DEFAULT` to the latest runtime version. Terraform also
+updates each named endpoint, reading its runtime version after the runtime update
+completes to avoid the AWSCC provider's stale version value in the update plan.
+
+Run the local hash regression checks with `python3 -B -m unittest discover -s tests`.
 
 ## Inspecting memory
 
