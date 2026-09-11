@@ -1,6 +1,7 @@
-"""
-AWS STRANDS Agent with BedrockAgentCoreApp
-This agent uses the STRANDS framework with BedrockAgentCoreApp to provide mathematical calculation and weather assistance.
+"""Strands agent served by AgentCore Runtime.
+
+Strands calls Bedrock and runs tools; AgentCore hosts requests and provides
+the optional memory and browser resources configured by Terraform.
 """
 
 import os
@@ -23,7 +24,7 @@ from bedrock_agentcore.memory.integrations.strands.session_manager import (
 )
 from strands.models import BedrockModel
 
-# Configure logging
+# Send application and tool logs to the runtime's standard log stream.
 log_level = os.environ.get('LOG_LEVEL', 'INFO')
 logging.basicConfig(
     level=getattr(logging, log_level),
@@ -31,7 +32,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger('bedrock-agent-runtime')
 
-# Parse JSON resources from environment
+# Terraform passes resource maps as JSON strings (see runtime.tf).
+# Missing maps default to empty dictionaries so integrations stay optional.
 try:
     runtimes = json.loads(os.environ.get("RUNTIMES", "{}"))
     memories = json.loads(os.environ.get("MEMORIES", "{}"))
@@ -44,16 +46,14 @@ except json.JSONDecodeError as e:
     gateways = {}
     browsers = {}
 
-# Log loaded resources
+# Log logical names to help diagnose missing Terraform resource wiring.
 logger.info("Available runtimes: %s", list(runtimes.keys()))
 logger.info("Available memories: %s", list(memories.keys()))
 logger.info("Available gateways: %s", list(gateways.keys()))
 logger.info("Available browsers: %s", list(browsers.keys()))
 
-# Resolve ARNs by stable logical name (the key in var.memories /
-# var.browsers). The "-XYZ" suffix on the AWS-assigned ID changes per
-# deploy; the logical key does not. Bare resource IDs (needed by some SDK
-# calls) are derived from the ARN at startup.
+# Terraform's logical names stay stable when AWS regenerates resource IDs.
+# SDK calls below need bare IDs, which we extract from the supplied ARNs.
 _arn_parser = ArnParser()
 
 
@@ -92,10 +92,10 @@ if BROWSER_ID:
 else:
     logger.info("No browser configured; browse tool disabled")
 
-# Initialize the BedrockAgentCoreApp
+# The SDK serves runtime requests and dispatches them to @app.entrypoint.
 app = BedrockAgentCoreApp()
 
-# Create a custom weather tool
+# @tool exposes a function's signature and docstring to the model.
 
 
 @tool
@@ -111,10 +111,12 @@ def weather(location: str = "Seattle, WA") -> str:
 
     def get_json(url: str) -> dict:
         request = Request(url, headers={"User-Agent": "bedrock-agent-core/1.0"})
+        # Time out stalled network operations so a weather lookup can fail promptly.
         with urlopen(request, timeout=10) as response:
             return json.load(response)
 
     try:
+        # Resolve the location to coordinates before requesting current conditions.
         geocode_url = "https://geocoding-api.open-meteo.com/v1/search?" + urlencode({
             "name": location,
             "count": 1,
@@ -139,6 +141,7 @@ def weather(location: str = "Seattle, WA") -> str:
         })
         current = get_json(forecast_url).get("current") or {}
         weather_code = current.get("weather_code")
+        # Translate the API's numeric weather codes into readable tool output.
         conditions = {
             0: "clear sky",
             1: "mainly clear",
@@ -173,10 +176,11 @@ def weather(location: str = "Seattle, WA") -> str:
             f"wind {current.get('wind_speed_10m')} mph."
         )
     except (HTTPError, URLError, TimeoutError, KeyError, ValueError) as exc:
+        # Return a failed lookup as tool output so the agent can explain it.
         logger.warning("Weather lookup failed for %s: %s", location, exc)
         return f"I couldn't retrieve weather for {location!r} right now."
 
-# Create a custom greeting tool
+# This local tool returns text without an external service call.
 
 
 @tool
@@ -204,15 +208,13 @@ def browse(url: str) -> str:
     if not BROWSER_ID:
         return "Browser is not configured for this runtime."
 
-    # Imports kept local so module import doesn't cost the playwright load
-    # when the tool isn't used.
+    # Load browser dependencies only when this tool is invoked.
     from bedrock_agentcore.tools.browser_client import BrowserClient
     from playwright.sync_api import sync_playwright
 
     logger.info("Browse tool called with url=%s", url)
     region = os.environ.get("AWS_REGION", "us-east-1")
-    # BrowserClient in this SDK version is not a context manager — manage
-    # session lifecycle explicitly with try/finally.
+    # Manage the remote browser's lifetime explicitly, including failure cleanup.
     client = BrowserClient(region=region)
     session_started = False
     try:
@@ -220,6 +222,7 @@ def browse(url: str) -> str:
         start_resp = client.start(identifier=BROWSER_ID)
         session_started = True
         logger.info("browse: start returned: %r", start_resp)
+        # Connect Playwright to the managed browser over Chrome DevTools Protocol.
         ws_url, headers = client.generate_ws_headers()
         logger.info("browse: ws_url=%s headers_keys=%s",
                     ws_url, list(headers.keys()) if headers else None)
@@ -236,6 +239,7 @@ def browse(url: str) -> str:
             text = page.inner_text("body")
             logger.info("browse: extracted %d chars; first 300=%r", len(text), text[:300])
             chromium.close()
+            # Limit page text sent back to the model to keep tool output bounded.
             result = text[:4000]
             logger.info("browse: returning %d chars to agent", len(result))
             return result
@@ -243,6 +247,7 @@ def browse(url: str) -> str:
         logger.exception("Browse tool failed for url=%s", url)
         return f"Browse failed: {type(e).__name__}: {e}"
     finally:
+        # Stop any started remote session, including after navigation errors.
         if session_started:
             try:
                 client.stop()
@@ -251,10 +256,8 @@ def browse(url: str) -> str:
                 logger.exception("browse: error stopping BrowserClient session")
 
 
-# Configure the Bedrock model. temperature/max_tokens are first-class BedrockModel
-# kwargs (they map to Converse inferenceConfig) — do not pass them via
-# additional_request_fields, where they land in additionalModelRequestFields and
-# are ignored, leaving max_tokens effectively unset (model default → throttling risk).
+# Pass inference settings directly to BedrockModel, not additional_request_fields.
+# An explicit output limit avoids reserving the model's larger default token budget.
 model_id = os.environ.get("MODEL_ID", "global.anthropic.claude-sonnet-4-5-20250929-v1:0")
 model = BedrockModel(
     model_id=model_id,
@@ -262,8 +265,8 @@ model = BedrockModel(
     max_tokens=2048,
 )
 
-# Persona for the agent. With memory enabled the session manager injects the
-# user's remembered facts into context automatically — no prompt stitching needed.
+# Tool registration makes tools available; this prompt guides when to call them.
+# The memory session manager adds remembered facts to context separately.
 BASE_SYSTEM_PROMPT = (
     "You're a helpful assistant. You can do simple math calculations, tell the weather, "
     "provide personalized greetings, and browse web pages. "
@@ -272,11 +275,14 @@ BASE_SYSTEM_PROMPT = (
     "acknowledge any other information they shared."
 )
 
+# calculator comes from strands_tools; the other tools are defined above.
+# Strands executes the model's tool requests and feeds their results back to it.
 TOOLS = [calculator, weather, greeting, browse]
 
 
 def _build_agent(session_manager=None):
     """Construct the Strands agent, optionally wired to AgentCore Memory."""
+    # Create an agent per invocation; session history belongs in the session manager.
     return Agent(
         model=model,
         tools=TOOLS,
@@ -287,19 +293,12 @@ def _build_agent(session_manager=None):
 
 @app.entrypoint
 def bedrock_agent_runtime(payload, context):
-    """Main entrypoint for the Runtime — invoke the agent for one turn.
+    """Handle one prompt, with optional conversation history and user facts.
 
-    When memory is configured, AgentCoreMemorySessionManager transparently
-    (1) recalls this actor's relevant long-term facts into context before the
-    turn and (2) persists the conversation afterward — no manual retrieve/write.
-
-    Recall keys on actor_id; short-term continuity keys on session_id:
-    - session_id comes from the Runtime's own runtimeSessionId (context.session_id),
-      so multi-turn context within one conversation is grouped correctly — including
-      in the console playground, which auto-generates a session but never puts it in
-      the payload. Falls back to a fresh id only if the runtime didn't supply one.
-    - actor_id is app-level: not derived from the caller's IAM role. Pass it in the
-      payload for per-user memory; otherwise everyone shares "default-user".
+    payload["actor_id"] groups a user's memory across conversations. It is supplied
+    by the caller, not derived from IAM; omitting it shares "default-user" memory.
+    context.session_id identifies this conversation, including in the playground.
+    The session manager recalls relevant facts and persists the turn's messages.
     """
     logger.info("Received payload: %s", json.dumps(payload))
     user_input = payload.get("prompt", "")
@@ -307,9 +306,8 @@ def bedrock_agent_runtime(payload, context):
     session_id = getattr(context, "session_id", None) or str(uuid.uuid4())
     logger.info("User input: %s (actor=%s, session=%s)", user_input, actor_id, session_id)
 
-    # No memory configured — run a plain, stateless agent. str(result) yields the
-    # agent's final text (Strands AgentResult.__str__), robust to tool-use/reasoning
-    # blocks that manual content[0] indexing would trip over.
+    # Without memory, each request starts fresh. str(result) extracts final text
+    # without assuming the first response block contains text rather than tool use.
     if not MEMORY_ID:
         return str(_build_agent()(user_input))
 
@@ -318,6 +316,7 @@ def bedrock_agent_runtime(payload, context):
         session_id=session_id,
         actor_id=actor_id,
         retrieval_config={
+            # Retrieve up to five facts that meet the relevance threshold.
             MEMORY_NAMESPACE: RetrievalConfig(top_k=5, relevance_score=0.3),
         },
     )
@@ -331,6 +330,6 @@ def bedrock_agent_runtime(payload, context):
 
 
 if __name__ == "__main__":
-    # Run the app without any parameters - BedrockAgentCoreApp handles defaults
+    # Start the SDK's HTTP server when launched by the container entry point.
     logger.info("Starting Bedrock Agent Runtime with STRANDS framework")
     app.run()

@@ -1,6 +1,7 @@
-# ─── CODE runtime ───
-# https://registry.terraform.io/providers/hashicorp/awscc/latest/docs/data-sources/bedrockagentcore_runtime
+# Deployment flow: versioned artifacts -> runtimes -> stable named endpoints.
+# Both runtimes use the execution role in iam.tf for AWS access from agent code.
 
+# CODE runtime: launch a Python entry point from the ZIP uploaded by code_build.tf.
 resource "awscc_bedrockagentcore_runtime" "code_agent" {
   agent_runtime_name = local.code_runtime_name
   description        = "Python-based agent runtime"
@@ -11,16 +12,19 @@ resource "awscc_bedrockagentcore_runtime" "code_agent" {
       code = {
         s3 = {
           bucket = aws_s3_bucket.code_runtime.id
+          # The API calls this "prefix", but it is the complete ZIP object key.
           prefix = aws_s3_object.code_runtime_source.key
           # A new ZIP version updates the runtime even though its key is unchanged.
           version_id = aws_s3_object.code_runtime_source.version_id
         }
       }
+      # Match the filename inside the ZIP and the Python version used for packaging.
       entry_point = ["agent.py"]
       runtime     = "PYTHON_3_11"
     }
   }
 
+  # Use AgentCore-managed public networking without attaching a customer VPC.
   network_configuration = {
     network_mode = "PUBLIC"
   }
@@ -31,13 +35,14 @@ resource "awscc_bedrockagentcore_runtime" "code_agent" {
 
   tags = local.common_tags
 
+  # Wait for the uploaded artifact and IAM propagation before runtime creation.
   depends_on = [
     time_sleep.runtime_iam_propagation,
     aws_s3_object.code_runtime_source,
   ]
 }
 
-# ─── CONTAINER runtime ───
+# CONTAINER runtime: run the Strands app from the image pushed by container_build.tf.
 resource "awscc_bedrockagentcore_runtime" "container_agent" {
   agent_runtime_name = local.container_runtime_name
   description        = "Container-based agent runtime with STRANDS"
@@ -45,18 +50,18 @@ resource "awscc_bedrockagentcore_runtime" "container_agent" {
 
   agent_runtime_artifact = {
     container_configuration = {
+      # The image tag contains the build ID, so source edits update the runtime.
       container_uri = local.ecr_image_uri
     }
   }
 
+  # The weather tool calls public APIs over this runtime's internet connection.
   network_configuration = {
     network_mode = "PUBLIC"
   }
 
-  # MEMORIES / BROWSERS env vars expose AgentCore resource ARNs to the agent
-  # code under stable logical names — app.py looks up memories["semantic_memory"]
-  # and browsers["web_browser"]. AWS-assigned IDs carry a per-deploy suffix
-  # the logical keys do not.
+  # Environment values are strings, so encode resource maps as JSON for app.py.
+  # Logical keys match its lookups; AWS-assigned ARNs can change on recreation.
   environment_variables = {
     MODEL_ID = var.bedrock_model_id
     MEMORIES = jsonencode({
@@ -73,13 +78,14 @@ resource "awscc_bedrockagentcore_runtime" "container_agent" {
 
   tags = local.common_tags
 
+  # The image URI alone does not tell Terraform to wait for the local Docker push.
   depends_on = [
     null_resource.container_build_push,
     time_sleep.runtime_iam_propagation,
   ]
 }
 
-# ─── Runtime endpoints ───
+# Runtime endpoints: keep caller-facing names while advancing their runtime versions.
 # AWSCC retains the resource's old version in the update plan. Read it again
 # after the runtime update so the named endpoint receives the new version in
 # the same apply. With no runtime changes, these reads happen during planning.

@@ -1,17 +1,20 @@
-# Local Python 3.11/ARM64 packaging. S3 versions identify the uploaded artifact.
+# Build flow: selected sources + recipe -> build ID -> local ZIP -> versioned S3 object.
+# Packaging runs on the workstation; runtime.tf deploys the uploaded ZIP version.
 locals {
   code_src_dir      = "${path.module}/runtime-sources/code-agent"
   code_build_script = "${path.module}/scripts/build-code.sh"
   code_zip_path     = abspath("${path.module}/.terraform/tmp/code-agent.zip")
 
-  # Hash and package the same inputs, including relative names for rename detection.
+  # Use one source list for hashing and packaging; unlisted files are ignored.
   code_src_files = sort(["agent.py", "requirements.txt"])
+  # Include filenames and recipe contents to detect renames and packaging changes.
   code_build_id = sha256(jsonencode({
     sources = { for f in local.code_src_files : f => filesha256("${local.code_src_dir}/${f}") }
     recipe  = filesha256(local.code_build_script)
   }))
 }
 
+# A changed trigger replaces this local build marker and reruns its provisioner.
 resource "null_resource" "code_build" {
   triggers = {
     build_id = local.code_build_id
@@ -19,9 +22,11 @@ resource "null_resource" "code_build" {
     bucket = aws_s3_bucket.code_runtime.id
   }
 
+  # At apply time, the script installs Python 3.11 ARM64 wheels and creates the ZIP.
   provisioner "local-exec" {
     interpreter = ["bash", "-c"]
     command     = "bash \"$BUILD_SCRIPT\""
+    # Pass values as environment data so paths are not embedded in shell source.
     environment = {
       BUILD_SCRIPT       = abspath(local.code_build_script)
       BUILD_SOURCE_DIR   = abspath(local.code_src_dir)
@@ -31,11 +36,15 @@ resource "null_resource" "code_build" {
   }
 }
 
+# Keep a stable S3 key; bucket versioning gives each upload a distinct version ID.
 resource "aws_s3_object" "code_runtime_source" {
-  bucket      = aws_s3_bucket.code_runtime.id
-  key         = "source.zip"
-  source      = local.code_zip_path
+  bucket = aws_s3_bucket.code_runtime.id
+  key    = "source.zip"
+  source = local.code_zip_path
+
+  # Track build inputs because the ZIP may not exist yet during planning.
   source_hash = local.code_build_id
 
+  # Upload only after packaging finishes and S3 versioning is enabled.
   depends_on = [null_resource.code_build, aws_s3_bucket_versioning.code_runtime]
 }
