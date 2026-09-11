@@ -7,6 +7,9 @@ import os
 import json
 import logging
 import uuid
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 from botocore.utils import ArnParser
 from strands import Agent, tool
 from strands_tools import calculator
@@ -96,11 +99,82 @@ app = BedrockAgentCoreApp()
 
 
 @tool
-def weather():
-    """Get weather information"""
-    # Dummy implementation - in production, this would call a weather API
-    logger.info("Weather tool called")
-    return "It's sunny with a temperature of 72°F (22°C). Perfect weather for outdoor activities!"
+def weather(location: str = "Seattle, WA") -> str:
+    """Get the current weather for a city, region, or postal address.
+
+    Uses the public Open-Meteo geocoder and forecast API. No API key is
+    required. Pass a specific location when the user asks about somewhere
+    other than the default city.
+    """
+    location = (location or "Seattle, WA").strip()
+    logger.info("Weather tool called for location=%s", location)
+
+    def get_json(url: str) -> dict:
+        request = Request(url, headers={"User-Agent": "bedrock-agent-core/1.0"})
+        with urlopen(request, timeout=10) as response:
+            return json.load(response)
+
+    try:
+        geocode_url = "https://geocoding-api.open-meteo.com/v1/search?" + urlencode({
+            "name": location,
+            "count": 1,
+            "language": "en",
+            "format": "json",
+        })
+        places = get_json(geocode_url).get("results") or []
+        if not places:
+            return f"I couldn't find a location matching {location!r}."
+
+        place = places[0]
+        forecast_url = "https://api.open-meteo.com/v1/forecast?" + urlencode({
+            "latitude": place["latitude"],
+            "longitude": place["longitude"],
+            "current": (
+                "temperature_2m,apparent_temperature,relative_humidity_2m,"
+                "weather_code,wind_speed_10m"
+            ),
+            "temperature_unit": "fahrenheit",
+            "wind_speed_unit": "mph",
+            "timezone": "auto",
+        })
+        current = get_json(forecast_url).get("current") or {}
+        weather_code = current.get("weather_code")
+        conditions = {
+            0: "clear sky",
+            1: "mainly clear",
+            2: "partly cloudy",
+            3: "overcast",
+            45: "foggy",
+            48: "depositing rime fog",
+            51: "light drizzle",
+            53: "drizzle",
+            55: "heavy drizzle",
+            61: "light rain",
+            63: "rain",
+            65: "heavy rain",
+            71: "light snow",
+            73: "snow",
+            75: "heavy snow",
+            80: "light rain showers",
+            81: "rain showers",
+            82: "heavy rain showers",
+            95: "thunderstorms",
+            96: "thunderstorms with hail",
+            99: "thunderstorms with heavy hail",
+        }
+        place_name = ", ".join(
+            value for value in (place.get("name"), place.get("admin1"), place.get("country"))
+            if value
+        )
+        return (
+            f"Current weather in {place_name}: {conditions.get(weather_code, 'unknown conditions')}, "
+            f"{current.get('temperature_2m')}°F (feels like {current.get('apparent_temperature')}°F), "
+            f"humidity {current.get('relative_humidity_2m')}%, "
+            f"wind {current.get('wind_speed_10m')} mph."
+        )
+    except (HTTPError, URLError, TimeoutError, KeyError, ValueError) as exc:
+        logger.warning("Weather lookup failed for %s: %s", location, exc)
+        return f"I couldn't retrieve weather for {location!r} right now."
 
 # Create a custom greeting tool
 

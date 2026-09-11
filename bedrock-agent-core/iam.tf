@@ -57,6 +57,28 @@ data "aws_iam_policy_document" "runtime_policy" {
     resources = ["*"]
   }
 
+  # Bedrock may use AWS Marketplace on the runtime's first invocation of a
+  # third-party serverless model. Keep these permissions scoped to the Claude
+  # Sonnet 4.5 product that this deployment uses.
+  statement {
+    sid       = "AllowMarketplaceSubscriptionVisibility"
+    effect    = "Allow"
+    actions   = ["aws-marketplace:ViewSubscriptions"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid       = "AllowClaudeSonnet45Subscription"
+    effect    = "Allow"
+    actions   = ["aws-marketplace:Subscribe"]
+    resources = ["*"]
+    condition {
+      test     = "StringEquals"
+      variable = "aws-marketplace:ProductId"
+      values   = ["prod-mxcfnwvpd6kb4"]
+    }
+  }
+
   statement {
     sid    = "AllowWorkloadIdentityTokenManagement"
     effect = "Allow"
