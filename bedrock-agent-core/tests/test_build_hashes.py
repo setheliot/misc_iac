@@ -18,6 +18,7 @@ class BuildHashTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.workspace = Path(temporary.name)
         shutil.copytree(PROJECT / "runtime-sources", self.workspace / "runtime-sources")
+        shutil.copytree(PROJECT / "scripts", self.workspace / "scripts")
         # These locals use only filesystem functions, so they need no providers.
         configuration = "\n".join(
             (PROJECT / name).read_text().split('\nresource "', 1)[0]
@@ -30,8 +31,8 @@ class BuildHashTests(unittest.TestCase):
         return subprocess.run(
             ["terraform", f"-chdir={self.workspace}", "console", "-no-color"],
             input=(
-                "jsonencode({container = local.container_src_hash, "
-                "code = local.code_src_hash})\n"
+                "jsonencode({container = local.container_build_id, "
+                "code = local.code_build_id})\n"
             ),
             capture_output=True,
             text=True,
@@ -46,7 +47,7 @@ class BuildHashTests(unittest.TestCase):
 
     def test_unchanged_inputs_and_timestamps_do_not_change_hashes(self):
         self.assertEqual(self.hashes(), self.baseline)
-        for path in (self.workspace / "runtime-sources").rglob("*"):
+        for path in self.workspace.rglob("*"):
             if path.is_file():
                 stat = path.stat()
                 os.utime(path, (stat.st_atime + 60, stat.st_mtime + 60))
@@ -91,6 +92,38 @@ class BuildHashTests(unittest.TestCase):
         result = self.evaluate()
         self.assertIn("Error in function call", result.stderr)
         self.assertIn("no such file or directory", result.stderr)
+
+    def test_recipe_changes_only_its_runtime_build_id(self):
+        for runtime in ("container", "code"):
+            with self.subTest(runtime=runtime):
+                path = self.workspace / "scripts" / f"build-{runtime}.sh"
+                original = path.read_bytes()
+                try:
+                    path.write_bytes(original + b"\n# Changed recipe\n")
+                    updated = self.hashes()
+                    self.assertNotEqual(updated[runtime], self.baseline[runtime])
+                    other = "code" if runtime == "container" else "container"
+                    self.assertEqual(updated[other], self.baseline[other])
+                finally:
+                    path.write_bytes(original)
+
+    def test_renaming_identical_source_changes_only_its_runtime_build_id(self):
+        configuration = self.workspace / "main.tf"
+        original = configuration.read_text()
+        for runtime, filename in (("container", "app.py"), ("code", "agent.py")):
+            with self.subTest(runtime=runtime):
+                source = self.workspace / "runtime-sources" / f"{runtime}-agent" / filename
+                renamed = source.with_name("renamed.py")
+                source.rename(renamed)
+                try:
+                    configuration.write_text(original.replace(f'"{filename}"', '"renamed.py"'))
+                    updated = self.hashes()
+                    self.assertNotEqual(updated[runtime], self.baseline[runtime])
+                    other = "code" if runtime == "container" else "container"
+                    self.assertEqual(updated[other], self.baseline[other])
+                finally:
+                    renamed.rename(source)
+                    configuration.write_text(original)
 
 
 if __name__ == "__main__":

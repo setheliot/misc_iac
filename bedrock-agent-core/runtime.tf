@@ -59,10 +59,6 @@ resource "awscc_bedrockagentcore_runtime" "container_agent" {
   # the logical keys do not.
   environment_variables = {
     MODEL_ID = var.bedrock_model_id
-    # Force a new AgentCore runtime version when the image source changes.
-    # The image URI uses a mutable tag, so depends_on alone would only rebuild
-    # and push the image without updating the runtime endpoint.
-    CONTAINER_SOURCE_HASH = local.container_src_hash
     MEMORIES = jsonencode({
       (local.memory_name) = {
         arn = awscc_bedrockagentcore_memory.semantic_memory.memory_arn

@@ -7,7 +7,7 @@ terraform {
       version = ">= 6.18.0"
     }
     awscc = {
-      source  = "hashicorp/awscc"
+      source = "hashicorp/awscc"
       # awscc 1.87.0 changed AWS::BedrockAgentCore::Gateway ProtocolType to a
       # JSON-string type, but Read returns the plain API value and trips the
       # provider's own validator on refresh. Pin below 1.87 until fixed upstream.

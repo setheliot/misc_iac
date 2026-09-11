@@ -9,12 +9,6 @@ variable "project_prefix" {
   default     = "agentcore-demo"
 }
 
-variable "container_image_tag" {
-  description = "Tag used for the container runtime image pushed to ECR"
-  type        = string
-  default     = "latest"
-}
-
 variable "bedrock_model_id" {
   description = "Bedrock model ID the container agent uses (passed as MODEL_ID env var)"
   type        = string

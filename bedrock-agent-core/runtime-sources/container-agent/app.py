@@ -181,7 +181,13 @@ def weather(location: str = "Seattle, WA") -> str:
 
 @tool
 def greeting(name: str = "there"):
-    """Generate a personalized greeting"""
+    """Generate a personalized greeting when the user introduces themselves.
+
+    Call this tool when the user provides their name or asks for a greeting.
+
+    Args:
+        name: The user's name as provided, or "there" if no name is available.
+    """
     logger.info(f"Greeting tool called with name: {name}")
     return f"Hello, {name}! Welcome to the Bedrock Agent Runtime."
 
@@ -258,7 +264,13 @@ model = BedrockModel(
 
 # Persona for the agent. With memory enabled the session manager injects the
 # user's remembered facts into context automatically — no prompt stitching needed.
-BASE_SYSTEM_PROMPT = "You're a helpful assistant. You can do simple math calculations, tell the weather, provide personalized greetings, and browse web pages."
+BASE_SYSTEM_PROMPT = (
+    "You're a helpful assistant. You can do simple math calculations, tell the weather, "
+    "provide personalized greetings, and browse web pages. "
+    "When the user introduces themselves or provides their name, call the greeting tool "
+    "with that name before responding. Use the tool's greeting in your response, then "
+    "acknowledge any other information they shared."
+)
 
 TOOLS = [calculator, weather, greeting, browse]
 

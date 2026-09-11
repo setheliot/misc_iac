@@ -1,6 +1,6 @@
 resource "aws_ecr_repository" "container_runtime" {
   name                 = "${var.project_prefix}/${local.container_runtime_name}"
-  image_tag_mutability = "MUTABLE"
+  image_tag_mutability = "IMMUTABLE"
   force_delete         = true
 
   image_scanning_configuration {

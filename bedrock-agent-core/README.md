@@ -27,11 +27,11 @@ separate roles. The main differences are:
 - **Local builds.** [Container](container_build.tf) and [CODE](code_build.tf)
   artifacts are built on your workstation and uploaded to ECR/S3, replacing
   upstream's [CodeBuild workflow](https://github.com/aws-ia/terraform-aws-agentcore/blob/main/codebuild.tf).
-- **Content-based rebuilds.** SHA-256 hashes track selected source files, so edits
-  rebuild only the affected runtime. Timestamps and unlisted files are ignored.
-  See [Apply](#apply) for build inputs and packaging-recipe changes.
-- **Runtime and endpoint updates.** [runtime.tf](runtime.tf) tracks source hashes
-  and S3 versions to deploy changes. Named endpoints follow new runtime versions
+- **Content-based rebuilds.** One build ID per runtime hashes source filenames,
+  contents, and its build script. Edits rebuild only the affected runtime;
+  timestamps and unlisted files are ignored. See [Apply](#apply) for details.
+- **Runtime and endpoint updates.** [runtime.tf](runtime.tf) uses build-ID image
+  tags and S3 versions to deploy changes. Named endpoints follow new runtime versions
   instead of serving stale code. Endpoint version tracking is proposed upstream
   in [PR #31](https://github.com/aws-ia/terraform-aws-agentcore/pull/31) (not yet merged).
 - **CloudWatch logging.** [iam.tf](iam.tf) uses the correct
@@ -104,38 +104,71 @@ The changes below are implemented in
 
 Runs on your workstation, not in CI. You need:
 
-- AWS CLI configured (`aws sts get-caller-identity` works)
+- AWS CLI v2 configured (`aws sts get-caller-identity` works)
 - Terraform `>= 1.14`
-- Docker with `buildx` (the container build pushes `linux/arm64` images)
-- Python 3 + `pip` (used to install ARM64 wheels for the CODE runtime)
+- Bash 3.2 or newer (scripts can be launched from Bash or zsh on Linux/macOS)
+- A running Docker daemon with `buildx` and an ARM64-capable builder
+- Python 3 with `python3 -m pip` (used to install ARM64 wheels for the CODE runtime)
 - `zip`
+
+The [build scripts](scripts/) check required commands and report missing tools,
+Docker/builder problems, and authentication failures. They use portable system
+utilities and support paths containing spaces. Dependencies are not installed
+automatically. Docker checks run only when an image actually needs building.
 
 ## Apply
 
 ```bash
 terraform init
+terraform plan -var-file=environments/us-east-1.tfvars
 terraform apply -var-file=environments/us-east-1.tfvars
 ```
 
-Container builds and code-runtime pip installs run locally via `null_resource`
-during `apply`. Content changes to the inputs listed in `container_src_files`
-or `code_src_files` trigger the corresponding build. Update those lists when
-adding application modules or data, and keep the container list aligned with
-the Dockerfile's `COPY` inputs. Caches, editor files, and documentation outside
-these lists do not trigger builds. Comments and whitespace within listed files
-still count as content changes.
+Terraform runs [build-container.sh](scripts/build-container.sh) and
+[build-code.sh](scripts/build-code.sh) locally through `null_resource` during
+`apply`. Each runtime has one SHA-256 build ID covering its selected source
+filenames, file contents, and build script. Update `container_src_files` or
+`code_src_files` when adding modules/data; keep the container list aligned with
+the Dockerfile's `COPY` inputs. Recipe edits automatically change the build ID.
+Timestamps, caches, and unlisted files are ignored; comments and whitespace in
+listed inputs still count.
 
-The container source hash triggers a runtime version after the image is pushed.
-The CODE runtime references the uploaded ZIP's S3 version. Unchanged inputs and
-configuration produce no new builds or runtime versions; changing deployment
-configuration (such as the model ID) can still require a runtime version. Changing
-the ECR destination/tag or `code_build_revision` deliberately triggers a build.
+After applying, inspect the recorded build IDs with
+`terraform output -raw container_build_id` and `terraform output -raw code_build_id`.
+
+Container images use immutable `build-<build ID>` tags. The script reuses an
+existing tag on retries or source reverts; otherwise it builds and pushes a new
+image. The changed image URI updates the runtime. CODE uses the same build ID
+for packaging and S3 `source_hash`, and the runtime references the uploaded ZIP's
+S3 `version_id`. Packaging uses a temporary directory and replaces the local ZIP
+only after success, preserving the previous ZIP on failure.
+
+Unchanged inputs and configuration produce no builds or runtime versions.
+Model/configuration changes can update a runtime without rebuilding. Changing
+the ECR repository or CODE bucket triggers a build for the new destination.
+Build IDs describe inputs, not reproducible dependency resolution: to refresh
+dependencies deliberately, update their versions in `requirements.txt` or the
+Dockerfile. Retained images are still subject to the ECR lifecycle policy.
 
 AWS automatically moves `DEFAULT` to the latest runtime version. Terraform also
 updates each named endpoint, reading its runtime version after the runtime update
 completes to avoid the AWSCC provider's stale version value in the update plan.
 
-Run the local hash regression checks with `python3 -B -m unittest discover -s tests`.
+Run local checks before deployment:
+
+```bash
+terraform fmt -check -recursive
+terraform validate
+bash -n scripts/build-container.sh scripts/build-code.sh
+shellcheck scripts/build-container.sh scripts/build-code.sh
+python3 -B -m unittest discover -s tests
+```
+
+ShellCheck is a development tool. Tests exercise real Terraform hashes and Bash
+scripts with fake AWS/Docker/pip commands and real ZIP packaging, without AWS
+calls or package downloads. To check another Bash version, set
+`BASH_TEST_EXECUTABLE=/path/to/bash` when running the tests. Native macOS smoke
+testing is recommended when changing shell commands.
 
 ## Inspecting memory
 

@@ -1,3 +1,8 @@
+output "code_build_id" {
+  description = "SHA-256 build ID of the CODE runtime source files and build script"
+  value       = local.code_build_id
+}
+
 output "code_runtime_id" {
   description = "ID of the CODE runtime"
   value       = awscc_bedrockagentcore_runtime.code_agent.agent_runtime_id
@@ -11,6 +16,11 @@ output "code_runtime_arn" {
 output "code_runtime_endpoint_arn" {
   description = "Endpoint ARN of the CODE runtime"
   value       = awscc_bedrockagentcore_runtime_endpoint.code_agent.agent_runtime_endpoint_arn
+}
+
+output "container_build_id" {
+  description = "SHA-256 build ID of the CONTAINER runtime source files and build script"
+  value       = local.container_build_id
 }
 
 output "container_runtime_id" {

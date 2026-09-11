@@ -23,5 +23,5 @@ locals {
   browser_name           = "web_browser"
   code_interpreter_name  = "python_interpreter"
 
-  ecr_image_uri = "${local.account_id}.dkr.ecr.${local.region}.amazonaws.com/${aws_ecr_repository.container_runtime.name}:${var.container_image_tag}"
+  ecr_image_uri = "${aws_ecr_repository.container_runtime.repository_url}:build-${local.container_build_id}"
 }
