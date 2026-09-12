@@ -1,0 +1,20 @@
+# Dockerfile.lambda
+FROM public.ecr.aws/lambda/python:3.13
+WORKDIR ${LAMBDA_TASK_ROOT}
+
+# app deps
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+# app code and templates
+COPY src/ /var/task/
+
+# add Lambda Web Adapter (as extension)
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
+
+# Tell LWA which port your app listens on (Gunicorn binds to 8080)
+ENV AWS_LWA_PORT=8080
+
+# IMPORTANT for AWS managed base images: override ENTRYPOINT to start your web app
+# Start your Flask app with Gunicorn; must be importable as "app:app"
+ENTRYPOINT ["python", "-m", "gunicorn", "-w", "1", "-b", "0.0.0.0:8080", "app:app"]
