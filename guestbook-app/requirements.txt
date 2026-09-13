@@ -1,0 +1,7 @@
+Flask==3.0.3
+pytest==8.3.3
+Werkzeug==3.0.6
+boto3==1.35.57
+
+# For Lambda compatibility
+gunicorn==21.*

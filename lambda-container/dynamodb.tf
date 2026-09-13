@@ -18,17 +18,6 @@ resource "aws_dynamodb_table" "guestbook" {
     type = "S"
   }
 
-  attribute {
-    name = "timestamp"
-    type = "N"
-  }
-
-  global_secondary_index {
-    name            = "timestamp-index"
-    hash_key        = "timestamp"
-    projection_type = "ALL"
-  }
-
   ttl {
     attribute_name = "ttl"
     enabled        = false

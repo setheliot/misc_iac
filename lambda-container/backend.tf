@@ -1,3 +1,6 @@
+# Uncomment everything below if you want to use an S3 backend for Terraform state
+# By default, state will be stored locally
+
 # Remote backend for storing Terraform state
 
 # You need an S3 bucket and DynamoDB table in the same AWS account where you will deploy your resources
@@ -8,12 +11,12 @@
 # Update `bucket` below to the name of the S3 bucket you will use. This usually will be a new bucket
 # but can also be one which you already use for Terraform state
 
-terraform {
-  backend "s3" {
-    bucket         = "terraform-state-bucket-demo-uniqueid"
-    key            = "lambda-demo/terraform.tfstate"
-    use_lockfile   = true
-    region         = "us-east-1"
-    encrypt        = false
-  }
-}
+# terraform {
+#   backend "s3" {
+#     bucket       = "terraform-state-bucket-demo-uniqueid"
+#     key          = "lambda-demo/terraform.tfstate"
+#     use_lockfile = true
+#     region       = "us-east-1"
+#     encrypt      = false
+#   }
+# }

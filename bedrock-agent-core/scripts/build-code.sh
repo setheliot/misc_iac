@@ -44,6 +44,7 @@ while IFS= read -r source_file; do
     cp "$BUILD_SOURCE_DIR/$source_file" "$package_dir/$source_file"
 done <<< "$BUILD_SOURCE_FILES"
 
+# Add the necessary requirements to the package directory
 if [[ -f "$package_dir/requirements.txt" ]]; then
     printf 'Installing Python 3.11 ARM64 wheels...\n'
     python3 -m pip install -r "$package_dir/requirements.txt" \
@@ -58,6 +59,8 @@ fi
 # Remove host-generated or bundled bytecode before uploading to PYTHON_3_11.
 find "$package_dir" -type d -name __pycache__ -prune -exec rm -rf {} +
 find "$package_dir" -type f -name '*.pyc' -exec rm -f {} +
+# Build the ZIP with agent.py and its installed dependencies at the archive root.
+# Terraform uploads this archive to S3 as source.zip (see code_build.tf).
 (cd "$package_dir" && zip -qr "$build_temp_dir/source.zip" .) \
     || fail "ZIP packaging failed."
 mv "$build_temp_dir/source.zip" "$BUILD_ZIP_PATH"

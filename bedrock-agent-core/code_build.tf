@@ -1,4 +1,6 @@
-# Build flow: selected sources + recipe -> build ID -> local ZIP -> versioned S3 object.
+# This builds the CODE agent, which is only one of the agents in this repo
+
+# Build flow: source hashes + build_script_hash -> build ID -> local ZIP -> versioned S3 object.
 # Packaging runs on the workstation; runtime.tf deploys the uploaded ZIP version.
 locals {
   code_src_dir      = "${path.module}/runtime-sources/code-agent"
@@ -7,10 +9,10 @@ locals {
 
   # Use one source list for hashing and packaging; unlisted files are ignored.
   code_src_files = sort(["agent.py", "requirements.txt"])
-  # Include filenames and recipe contents to detect renames and packaging changes.
+  # Include filenames, source hashes, and build_script_hash to detect build input changes.
   code_build_id = sha256(jsonencode({
-    sources = { for f in local.code_src_files : f => filesha256("${local.code_src_dir}/${f}") }
-    recipe  = filesha256(local.code_build_script)
+    sources           = { for f in local.code_src_files : f => filesha256("${local.code_src_dir}/${f}") }
+    build_script_hash = filesha256(local.code_build_script)
   }))
 }
 

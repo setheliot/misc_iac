@@ -1,3 +1,40 @@
+# Quick instructions
+
+Authenticate to the target AWS account from the command line.
+
+Ensure the container image in [us-east-1.tfvars](environments/us-east-1.tfvars) exists in the ECR repo in the target account.
+- If not you can build it from [guestbook-app](../guestbook-app/)
+
+`cd` to the same directory as this README: `infrastructure/lambda-container`
+
+```
+terraform init
+```
+
+```
+terraform plan -var-file=environments/us-east-1.tfvars
+```
+
+```
+terraform apply -var-file=environments/us-east-1.tfvars
+```
+Note the `api_endpoint`. For example:
+
+```
+Apply complete! Resources: 14 added, 0 changed, 0 destroyed.
+
+Outputs:
+
+api_endpoint = "https://53yxyz123a.execute-api.us-east-1.amazonaws.com/"
+dynamodb_table_name = "guestbook-entries-demo"
+lambda_function_arn = "arn:aws:lambda:us-east-1:442686149133:function:guestbook-app-demo"
+lambda_function_name = "guestbook-app-demo"
+```
+
+
+---
+---
+
 # Lambda Container Guestbook Application
 
 Serverless guestbook application using AWS Lambda with container images, API Gateway, and DynamoDB.
@@ -52,7 +89,6 @@ ecr_container_image = "guestbook-app:lambda"
 
 **Table**: `guestbook-entries-{environment}`
 - **Hash Key**: `GuestID` (String)
-- **GSI**: `timestamp-index` on `timestamp` (Number)
 - **Features**: Point-in-time recovery, DynamoDB Streams
 
 ## API Endpoints

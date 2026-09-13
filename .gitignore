@@ -37,3 +37,12 @@ override.tf.json
 terraform.rc
 
 .DS_Store
+/tmp/*
+
+# Python virtual environments and caches (at any depth)
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
