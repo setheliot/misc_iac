@@ -20,7 +20,7 @@ resource "aws_lambda_function" "gateway_target" {
   function_name    = "${var.project_prefix}-gateway-target"
   role             = aws_iam_role.lambda.arn
   handler          = "index.handler"
-  runtime          = "nodejs20.x"
+  runtime          = "nodejs26.x"
   source_code_hash = data.archive_file.gateway_target_lambda.output_base64sha256
 
   tracing_config {
