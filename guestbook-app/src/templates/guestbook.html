@@ -63,7 +63,13 @@
                         <td>{{ entry['Name'] }}</td>
                         <td>{{ entry['Message'] }}</td>
                         <td>{{ entry['GuestID'] }}</td>
-                        <td><a href="{{ url_for('hello', action='delete', guest_id=entry['GuestID']) }}" style="color: red; text-decoration: none;">&#x2715;</a></td>
+                        <td>
+                            <form action="{{ url_for('hello') }}" method="post">
+                                <input type="hidden" name="action" value="delete">
+                                <input type="hidden" name="guest_id" value="{{ entry['GuestID'] }}">
+                                <button type="submit" class="btn btn-link text-danger" aria-label="Delete entry">&#x2715;</button>
+                            </form>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>

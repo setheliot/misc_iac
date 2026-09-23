@@ -138,7 +138,7 @@ base_path = f"/{BASE_PATH}" if BASE_PATH else "/"
 
 log.info(f"Using base path: {base_path}")
 
-@app.route(base_path, methods=["GET", "POST", "DELETE"])
+@app.route(base_path, methods=["GET", "POST"])
 def hello():
     error = None
     pv_action = None
@@ -163,6 +163,15 @@ def hello():
     id_file_path = get_id_file_path()
 
     if request.method == "POST":
+        if request.form.get('action') == 'delete':
+            guest_id = request.form['guest_id']
+            try:
+                table.delete_item(Key={'GuestID': guest_id})
+                log.info(f"Deleted entry GuestID={guest_id}")
+            except Exception as e:
+                log.error(f"Error deleting from DynamoDB: {e}")
+            return redirect(url_for('hello'))
+
         # Get the user input from the form
         name = request.form['name']
         message = request.form['message']
@@ -194,16 +203,6 @@ def hello():
             log.error(error)
 
         # Redirect to GET method to show updated guestbook
-        return redirect(url_for('hello'))
-
-    if request.method == "DELETE" or request.args.get('action') == 'delete':
-        guest_id = request.args.get('guest_id')
-        if guest_id:
-            try:
-                table.delete_item(Key={'GuestID': guest_id})
-                log.info(f"Deleted entry GuestID={guest_id}")
-            except Exception as e:
-                log.error(f"Error deleting from DynamoDB: {e}")
         return redirect(url_for('hello'))
 
     # Retrieve last ID from PersistentVolume
