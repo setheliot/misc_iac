@@ -258,7 +258,7 @@ def browse(url: str) -> str:
 
 # Pass inference settings directly to BedrockModel, not additional_request_fields.
 # An explicit output limit avoids reserving the model's larger default token budget.
-model_id = os.environ.get("MODEL_ID", "global.anthropic.claude-sonnet-4-5-20250929-v1:0")
+model_id = os.environ.get("MODEL_ID", "global.amazon.nova-2-lite-v1:0")
 model = BedrockModel(
     model_id=model_id,
     temperature=0.1,  # Lower temperature for more consistent results

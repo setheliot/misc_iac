@@ -12,7 +12,7 @@ variable "project_prefix" {
 variable "bedrock_model_id" {
   description = "Bedrock model ID the container agent uses (passed as MODEL_ID env var)"
   type        = string
-  default     = "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+  default     = "global.amazon.nova-2-lite-v1:0"
 }
 
 variable "code_agent_log_level" {

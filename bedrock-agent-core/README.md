@@ -71,13 +71,17 @@ The changes below are implemented in
 - **Stable resource lookup.** Terraform injects `MEMORIES` / `BROWSERS` JSON maps
   keyed by `semantic_memory` / `web_browser`. Python resolves their ARNs and
   derives service IDs, keeping lookups independent of AWS-assigned ID suffixes.
-- **Configurable model and first-use subscription permissions.** `MODEL_ID`
-  honors Terraform's `bedrock_model_id`, defaulting to the global Claude Sonnet
-  4.5 inference profile. `temperature=0.1` and `max_tokens=2048` are passed as
-  `BedrockModel` arguments instead of `additional_request_fields`.
-  [iam.tf](iam.tf) adds Marketplace subscription
-  visibility and permission to subscribe specifically to that model's product;
-  review that permission when changing models.
+- **Configurable, lower-cost model.** `MODEL_ID` honors Terraform's
+  `bedrock_model_id`, defaulting to Amazon Nova 2 Lite via
+  `global.amazon.nova-2-lite-v1:0`. This global inference profile can route
+  requests across AWS Regions worldwide and is available from both configured
+  deployment regions (`us-east-1` and `us-west-2`). Nova 2 Lite supports the
+  agent's client-side tool calls through Bedrock Converse. Extended thinking
+  remains disabled by default to limit cost and latency; `temperature=0.1` and
+  `max_tokens=2048` are passed directly to `BedrockModel`.
+  Override `bedrock_model_id` in your regional `.tfvars` file to choose another
+  compatible model. Amazon Nova does not require Marketplace subscription
+  permissions; review model access requirements before switching providers.
 - **Complete final-text handling.** Responses use `str(AgentResult)` rather than
   assuming the first content block contains the final answer, accommodating
   tool-use and reasoning blocks.
@@ -86,7 +90,7 @@ The changes below are implemented in
 
 | Resource | Status |
 | --- | --- |
-| **CONTAINER** runtime | Active — STRANDS agent + Bedrock Claude with `browse`, `calculator`, live Open-Meteo `weather`, and `greeting` tools |
+| **CONTAINER** runtime | Active — STRANDS agent + Amazon Nova 2 Lite with `browse`, `calculator`, live Open-Meteo `weather`, and `greeting` tools |
 | Semantic memory | Active — long-term recall wired into CONTAINER via `AgentCoreMemorySessionManager` (Strands integration): auto-recalls the actor's facts before each turn and persists the conversation after |
 | Custom browser | Used by CONTAINER (`browse` tool) |
 | **CODE** runtime | Stub — no LLM, no tools, just echoes the prompt. Exists to demonstrate the zip / `PYTHON_3_11` deployment shape alongside the container shape |
